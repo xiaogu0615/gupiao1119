@@ -108,6 +108,17 @@ def fetch_yfinance_price(symbols):
             
     return prices
 
+def get_symbol_string(field_value):
+    """从飞书 API 返回的复杂字段值中提取出股票代码字符串"""
+    if isinstance(field_value, list) and field_value and 'text' in field_value[0]:
+        # 针对飞书 Primary Field (主字段) 这种 {type: 'text', text: 'AAPL'} 的格式
+        return field_value[0]['text']
+    elif isinstance(field_value, str):
+        # 针对其他简单字符串字段
+        return field_value
+    return None
+
+
 def main():
     if not all([APP_ID, APP_SECRET, BASE_TOKEN]):
         print("错误：请确保在 GitHub Secrets 中配置了 FEISHU_APP_ID, FEISHU_APP_SECRET 和 FEISHU_BASE_TOKEN。")
@@ -123,8 +134,11 @@ def main():
         record_map = {} # 用于存储 record_id 和 symbol 的映射
         
         for record in assets_records:
-            # 使用正确的 Field ID 来获取资产代码
-            symbol = record['fields'].get(FIELD_ID_MAP["Code"])
+            # 获取 Field ID 对应的值
+            raw_field_value = record['fields'].get(FIELD_ID_MAP["Code"])
+            
+            # 使用修正后的函数，从复杂的 API 格式中提取出纯净的股票代码字符串
+            symbol = get_symbol_string(raw_field_value)
             
             # 确保 symbol 存在且非空
             if symbol: 
@@ -144,7 +158,8 @@ def main():
         
         for symbol, price in realtime_prices.items():
             # 检查价格是否有效
-            if price is not None and symbol in record_map:
+            # yfinance 无法找到代码时返回 NaN，我们检查 price 是否为 None/NaN/inf
+            if pd.notna(price) and price is not None and symbol in record_map:
                 updates.append({
                     "record_id": record_map[symbol],
                     "fields": {
@@ -162,4 +177,6 @@ def main():
         print(f"程序运行出错: {e}")
 
 if __name__ == '__main__':
+    # 增加日志级别，以便调试 yfinance 的问题
+    yf.set_tz_cache_location(os.path.expanduser('~/.yfinance'))
     main()
