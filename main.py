@@ -15,9 +15,9 @@ ASSETS_TABLE_ID = "tblTFq4Cqsz0SSa1"
 
 # IMPORTANT: 通过诊断确认，资产代码的字段 ID 实际就是字符串 "Code"
 FIELD_ID_MAP = {
-    "Code": "Code",              # 资产代码 (已修正为 API 返回的键名 "Code")
-    "Type": "fldwUSEPXS",        # 资产类型 (无需修改)
-    "Price": "fldycnGfq3",       # 价格 (无需修改)
+    "Code": "Code",              # 资产代码 (Primary Field 键名)
+    "Type": "fldwUSEPXS",        # 资产类型 (字段 ID)
+    "Price": "fldycnGfq3",       # 价格 (字段 ID)
 }
 # --- 配置区 (CONF_END) ---
 
@@ -73,19 +73,32 @@ class FeishuClient:
             raise Exception(f"读取表格失败: {data.get('msg')}")
 
     def update_price_records(self, records_to_update):
-        """更新飞书表格中的记录"""
+        """更新飞书表格中的记录，并添加详细错误处理"""
         url = f"{FEISHU_API_BASE}/{self.base_token}/tables/{ASSETS_TABLE_ID}/records"
         payload = {"records": records_to_update}
 
         print(f"准备更新 {len(records_to_update)} 条记录...")
         response = requests.post(url, headers=self.headers, data=json.dumps(payload), params={"value_input_option": "custom"})
-        response.raise_for_status()
+        
+        # 检查 HTTP 状态码
+        if response.status_code != 200:
+            # 如果不是 200，尝试解析 JSON 错误信息
+            try:
+                error_data = response.json()
+                # 抛出包含飞书详细错误信息的异常
+                raise Exception(f"写入失败，HTTP 状态码: {response.status_code}. 飞书错误码: {error_data.get('code')}. 错误信息: {error_data.get('msg')}. 详细数据: {error_data}")
+            except json.JSONDecodeError:
+                # 如果无法解析 JSON，则抛出原始 HTTP 错误
+                response.raise_for_status()
+        
+        # 如果状态码是 200，解析数据
         data = response.json()
-
+        
         if data.get("code") == 0:
             print("数据成功写入飞书！✅")
         else:
-            raise Exception(f"写入失败，飞书返回错误: {data.get('msg')}. 详细错误信息: {data}")
+            # 飞书 API 可能会在 200 状态下返回业务错误
+            raise Exception(f"写入失败，飞书返回业务错误: {data.get('msg')}. 详细错误信息: {data}")
 
 def fetch_yfinance_price(symbols):
     """
@@ -105,22 +118,17 @@ def fetch_yfinance_price(symbols):
 
     prices = {}
     
-    # yfinance 返回的数据结构
-    # 如果只有一个代码，data 是一个 pandas Series/DataFrame
-    # 如果有多个代码，data 是一个多级索引的 DataFrame
+    # yfinance 返回的数据结构处理
     
     for symbol in unique_symbols:
         try:
-            # 尝试获取 'Adj Close' (调整后收盘价) 或 'Close' (收盘价)
             if len(unique_symbols) == 1:
-                # 单个代码返回的是 Series 或只有一列的 DataFrame
                 price = data['Adj Close'].iloc[-1] if 'Adj Close' in data.columns else data['Close'].iloc[-1]
             else:
-                # 多个代码返回的是多级索引 DataFrame
                 price = data['Adj Close'][symbol].iloc[-1] if 'Adj Close' in data.columns else data['Close'][symbol].iloc[-1]
 
-            # 确保价格是有效的数字
             if pd.notna(price):
+                # 将价格四舍五入到两位小数，并保留为浮点数
                 prices[symbol] = round(float(price), 2)
                 print(f"  ✅ {symbol}: {prices[symbol]}")
             else:
@@ -136,16 +144,13 @@ def fetch_yfinance_price(symbols):
 def get_symbol_string(field_value):
     """
     从飞书 API 返回的复杂字段值中提取出股票代码字符串。
-    根据诊断，飞书 Primary Field 字段 "Code" 直接返回字符串。
     """
     if not field_value:
         return None
     
-    # 针对简单字符串字段 (Primary Field)
     if isinstance(field_value, str):
         return field_value.strip()
     
-    # 保留对其他可能格式的兼容性，尽管目前看来不需要
     elif isinstance(field_value, list) and field_value and isinstance(field_value[0], dict) and 'text' in field_value[0]:
         return field_value[0]['text'].strip()
     
@@ -168,24 +173,13 @@ def main():
             
         # 2. 提取需要更新的股票代码和记录 ID
         symbols_to_fetch = []
-        records_to_update_map = {} # {symbol: [record_id, ...]}
-        
         code_field_id = FIELD_ID_MAP["Code"]
         price_field_id = FIELD_ID_MAP["Price"]
         
         for record in assets_records:
-            record_id = record["record_id"]
-            
-            # 使用修正后的解析函数
             symbol = get_symbol_string(record['fields'].get(code_field_id))
-            
             if symbol:
                 symbols_to_fetch.append(symbol)
-                
-                # 建立代码到记录 ID 的映射，方便后续更新
-                if symbol not in records_to_update_map:
-                    records_to_update_map[symbol] = []
-                records_to_update_map[symbol].append(record_id)
 
         if not symbols_to_fetch:
             print("未找到有效的资产代码。任务结束。")
@@ -207,14 +201,15 @@ def main():
             if symbol and symbol in price_data and price_data[symbol] is not None:
                 new_price = price_data[symbol]
                 
+                # *** 关键修改：尝试将浮点数价格转换为字符串 ***
+                # 这是因为飞书的“数字”或“货币”字段有时需要字符串格式的输入
+                price_value_for_feishu = str(new_price) 
+                
                 # 飞书 API 期望的更新结构
                 update_record = {
                     "record_id": record_id,
                     "fields": {
-                        # 注意：飞书 API 在更新时，如果字段 ID 是自定义的，需要用 Field ID；
-                        # 如果是 Primary Field (如这里的 "Code" 字段，但我们更新的是 "Price")，
-                        # 只需要确保使用正确的 Price 字段 ID
-                        price_field_id: new_price 
+                        price_field_id: price_value_for_feishu
                     }
                 }
                 feishu_payload.append(update_record)
@@ -233,6 +228,6 @@ def main():
         # 在 GitHub Actions 中，如果出现异常，脚本会以非零退出码退出，导致任务失败
 
 if __name__ == '__main__':
-    # 确保 yfinance 缓存路径设置，以防万一
+    # 确保 yfinance 缓存路径设置
     yf.set_tz_cache_location(os.path.expanduser('~/.yfinance'))
     main()
