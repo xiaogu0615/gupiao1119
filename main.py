@@ -73,14 +73,19 @@ class FeishuClient:
             raise Exception(f"读取表格失败: {data.get('msg')}")
 
     def update_price_records(self, records_to_update):
-        """更新飞书表格中的记录，重新添加 value_input_option=custom 参数"""
+        """更新飞书表格中的记录，改用 value_input_option=text 模式"""
         url = f"{FEISHU_API_BASE}/{self.base_token}/tables/{ASSETS_TABLE_ID}/records"
         payload = {"records": records_to_update}
 
         print(f"准备更新 {len(records_to_update)} 条记录...")
         
-        # *** 关键修改：重新添加 value_input_option=custom 参数 ***
-        response = requests.post(url, headers=self.headers, data=json.dumps(payload), params={"value_input_option": "custom"})
+        # *** 关键修改：改用 value_input_option=text 模式 ***
+        print("--- 调试：完整 JSON Payload 结构 ---")
+        print(json.dumps(payload, indent=4, ensure_ascii=False))
+        print("---------------------------------------")
+        
+        # 使用 text 选项，强制飞书将输入值（float）解析为目标字段的纯文本格式
+        response = requests.post(url, headers=self.headers, data=json.dumps(payload), params={"value_input_option": "text"})
         
         # 检查 HTTP 状态码
         if response.status_code != 200:
@@ -201,8 +206,8 @@ def main():
             if symbol and symbol in price_data and price_data[symbol] is not None:
                 new_price = price_data[symbol]
                 
-                # *** 关键修改：再次尝试将浮点数价格转换为字符串 ***
-                price_value_for_feishu = str(new_price) 
+                # *** 关键修改：使用浮点数，并依赖 value_input_option=text 强制解析 ***
+                price_value_for_feishu = new_price 
                 
                 # 飞书 API 期望的更新结构
                 update_record = {
