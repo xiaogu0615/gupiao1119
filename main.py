@@ -73,15 +73,14 @@ class FeishuClient:
             raise Exception(f"读取表格失败: {data.get('msg')}")
 
     def update_price_records(self, records_to_update):
-        """更新飞书表格中的记录，已移除 value_input_option 参数"""
+        """更新飞书表格中的记录，重新添加 value_input_option=custom 参数"""
         url = f"{FEISHU_API_BASE}/{self.base_token}/tables/{ASSETS_TABLE_ID}/records"
         payload = {"records": records_to_update}
 
         print(f"准备更新 {len(records_to_update)} 条记录...")
         
-        # *** 关键修改：移除 value_input_option=custom 参数 ***
-        # 允许飞书API以默认方式解析价格数据，这对于数字/货币类型通常是最佳选择
-        response = requests.post(url, headers=self.headers, data=json.dumps(payload))
+        # *** 关键修改：重新添加 value_input_option=custom 参数 ***
+        response = requests.post(url, headers=self.headers, data=json.dumps(payload), params={"value_input_option": "custom"})
         
         # 检查 HTTP 状态码
         if response.status_code != 200:
@@ -202,8 +201,8 @@ def main():
             if symbol and symbol in price_data and price_data[symbol] is not None:
                 new_price = price_data[symbol]
                 
-                # *** 关键修改：直接使用浮点数价格，不转换为字符串 ***
-                price_value_for_feishu = new_price 
+                # *** 关键修改：再次尝试将浮点数价格转换为字符串 ***
+                price_value_for_feishu = str(new_price) 
                 
                 # 飞书 API 期望的更新结构
                 update_record = {
@@ -212,6 +211,13 @@ def main():
                         price_field_id: price_value_for_feishu
                     }
                 }
+                
+                # *** 调试输出：打印一个示例 payload 元素 ***
+                if updated_count == 0:
+                    print(f"--- 调试：示例更新记录结构 (ID: {record_id}) ---")
+                    print(json.dumps(update_record, indent=4, ensure_ascii=False))
+                    print("-----------------------------------------------------")
+
                 feishu_payload.append(update_record)
                 updated_count += 1
                 
