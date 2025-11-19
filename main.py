@@ -116,8 +116,13 @@ def main():
         yfinance_symbols = []
         record_map = {} # 用于存储 record_id 和 symbol 的映射
         
+# ... (在 main() 函数体内找到这个 for 循环) ...
+        
         for record in assets_records:
-            symbol = record['fields'].get(FIELD_ID_MAP["Code"])
+            # 修改这里：使用 Field ID 而不是 "Code" 这个字符串来访问字段
+            symbol = record['fields'].get(FIELD_ID_MAP["Code"]) 
+            
+            # ... (后面代码不变) ...
             if symbol: 
                 yfinance_symbols.append(symbol)
                 record_map[symbol] = record['record_id'] # 记录每一行数据本身的ID
