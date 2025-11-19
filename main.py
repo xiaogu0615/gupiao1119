@@ -89,31 +89,15 @@ class FeishuClient:
 
 def fetch_yfinance_price(symbols):
     """使用 yfinance 获取股票/ETF/外汇/加密货币的价格"""
-    if not symbols:
-        return {}
-    
-    ticker_data = yf.download(symbols, period="1d", progress=False)
-    prices = {}
-    
-    # 解析价格数据
-    if len(symbols) == 1:
-        prices[symbols[0]] = ticker_data['Close'].iloc[-1]
-    else:
-        for symbol in symbols:
-            # 确保数据存在
-            if 'Close' in ticker_data:
-                 prices[symbol] = ticker_data['Close'][symbol].iloc[-1]
-            elif 'close' in ticker_data:
-                prices[symbol] = ticker_data['close'][symbol].iloc[-1]
-            
-    return prices
+    # 诊断模式下不需要实际获取价格，保留函数定义即可
+    return {}
 
 def get_symbol_string(field_value):
     """从飞书 API 返回的复杂字段值中提取出股票代码字符串"""
     if not field_value:
         return None
     
-    # 针对飞书 Primary Field (主字段) 这种 {type: 'text', text: 'AAPL'} 的格式
+    # 尝试解析飞书 Primary Field (主字段) 这种 {type: 'text', text: 'AAPL'} 的格式
     if isinstance(field_value, list) and field_value and isinstance(field_value[0], dict) and 'text' in field_value[0]:
         return field_value[0]['text'].strip()
     # 针对其他简单字符串字段
@@ -129,59 +113,36 @@ def main():
 
     try:
         feishu_client = FeishuClient(APP_ID, APP_SECRET, BASE_TOKEN)
-        
-        # 1. 从飞书读取资产列表 
+        # 注意：这里调用的是内部方法 _get_table_data，它将返回原始记录列表
         assets_records = feishu_client._get_table_data(ASSETS_TABLE_ID)
         
-        yfinance_symbols = []
-        record_map = {} # 用于存储 record_id 和 symbol 的映射
+        print("--- 诊断模式：读取记录的原始数据 ---")
+        code_field_id = FIELD_ID_MAP["Code"]
         
-        for record in assets_records:
+        found_symbols = 0
+        
+        # 遍历所有记录并打印原始数据
+        for i, record in enumerate(assets_records):
             # 获取 Field ID 对应的值
-            raw_field_value = record['fields'].get(FIELD_ID_MAP["Code"])
-            
-            # 使用修正后的函数，从复杂的 API 格式中提取出纯净的股票代码字符串
+            raw_field_value = record['fields'].get(code_field_id)
             symbol = get_symbol_string(raw_field_value)
+
+            print(f"记录 {i+1} (ID: {record.get('record_id', 'N/A')}):")
+            print(f"  Code Field ID ({code_field_id}) 原始值: {raw_field_value}")
+            print(f"  get_symbol_string 尝试解析结果: {symbol}")
             
-            # 确保 symbol 存在且非空
-            if symbol: 
-                yfinance_symbols.append(symbol)
-                record_map[symbol] = record['record_id'] # 记录每一行数据本身的ID
+            if symbol:
+                found_symbols += 1
         
-        if not yfinance_symbols:
-            # 打印调试信息，确认是读取问题还是空记录问题
-            print("没有找到需要更新的资产。请检查飞书表格中 'Code' 字段是否正确填充了数据。")
-            return
+        print(f"--- 诊断总结：共找到 {found_symbols} 个非空资产代码 ---")
 
-        # 2. 获取实时价格
-        print(f"正在查询以下资产代码的价格: {yfinance_symbols}")
-        realtime_prices = fetch_yfinance_price(yfinance_symbols)
+        # 诊断完成后，脚本退出
+        return 
 
-        # 3. 准备更新数据包
-        updates = []
-        price_field_id = FIELD_ID_MAP["Price"]
-        
-        for symbol, price in realtime_prices.items():
-            # 检查价格是否有效
-            # yfinance 无法找到代码时返回 NaN，我们检查 price 是否为 None/NaN/inf
-            if pd.notna(price) and price is not None and symbol in record_map:
-                updates.append({
-                    "record_id": record_map[symbol],
-                    "fields": {
-                        price_field_id: round(price, 4) # 将价格写入
-                    }
-                })
-
-        # 4. 写入飞书表格
-        if updates:
-            feishu_client._update_records(ASSETS_TABLE_ID, updates)
-        else:
-            print("未获取到有效价格，跳过写入。")
-        
     except Exception as e:
         print(f"程序运行出错: {e}")
 
 if __name__ == '__main__':
-    # 增加日志级别，以便调试 yfinance 的问题
+    # 确保 yfinance 缓存路径设置，即使在诊断模式下也保留
     yf.set_tz_cache_location(os.path.expanduser('~/.yfinance'))
     main()
