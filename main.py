@@ -13,9 +13,9 @@ BASE_TOKEN = os.getenv("FEISHU_BASE_TOKEN")
 # 表格 ID 和字段 ID 映射
 ASSETS_TABLE_ID = "tblTFq4Cqsz0SSa1"
 
-# 字段 Field ID 映射 (使用你之前收集的 ID)
+# 字段 Field ID 映射 (我们正在尝试定位正确的 Code ID)
 FIELD_ID_MAP = {
-    "Code": "fldaIfMQC8",        # 资产代码
+    "Code": "fldaIfMQC8",        # 资产代码 (此ID可能不正确，我们正在诊断)
     "Type": "fldwUSEPXS",        # 资产类型
     "Price": "fldycnGfq3",       # 价格
 }
@@ -89,7 +89,6 @@ class FeishuClient:
 
 def fetch_yfinance_price(symbols):
     """使用 yfinance 获取股票/ETF/外汇/加密货币的价格"""
-    # 诊断模式下不需要实际获取价格，保留函数定义即可
     return {}
 
 def get_symbol_string(field_value):
@@ -113,28 +112,22 @@ def main():
 
     try:
         feishu_client = FeishuClient(APP_ID, APP_SECRET, BASE_TOKEN)
-        # 注意：这里调用的是内部方法 _get_table_data，它将返回原始记录列表
         assets_records = feishu_client._get_table_data(ASSETS_TABLE_ID)
         
-        print("--- 诊断模式：读取记录的原始数据 ---")
-        code_field_id = FIELD_ID_MAP["Code"]
-        
-        found_symbols = 0
-        
-        # 遍历所有记录并打印原始数据
-        for i, record in enumerate(assets_records):
-            # 获取 Field ID 对应的值
-            raw_field_value = record['fields'].get(code_field_id)
-            symbol = get_symbol_string(raw_field_value)
-
-            print(f"记录 {i+1} (ID: {record.get('record_id', 'N/A')}):")
-            print(f"  Code Field ID ({code_field_id}) 原始值: {raw_field_value}")
-            print(f"  get_symbol_string 尝试解析结果: {symbol}")
+        if not assets_records:
+            print("未找到任何记录。请检查表格是否为空。")
+            return
             
-            if symbol:
-                found_symbols += 1
+        print("--- 诊断模式：打印第一个记录的所有字段原始数据 ---")
+        first_record = assets_records[0]
         
-        print(f"--- 诊断总结：共找到 {found_symbols} 个非空资产代码 ---")
+        print(f"记录 ID: {first_record.get('record_id', 'N/A')}")
+        print("所有字段 (Field ID: Value) 原始数据:")
+        # Pretty print the fields dictionary
+        # 这里打印了整个 fields 字典，以查找正确的 Field ID
+        print(json.dumps(first_record.get('fields'), indent=4, ensure_ascii=False))
+        
+        print("--- 诊断总结：请在上方输出中找到包含股票代码的字段，并提供其对应的 Field ID ---")
 
         # 诊断完成后，脚本退出
         return 
@@ -143,6 +136,6 @@ def main():
         print(f"程序运行出错: {e}")
 
 if __name__ == '__main__':
-    # 确保 yfinance 缓存路径设置，即使在诊断模式下也保留
+    # 确保 yfinance 缓存路径设置
     yf.set_tz_cache_location(os.path.expanduser('~/.yfinance'))
     main()
