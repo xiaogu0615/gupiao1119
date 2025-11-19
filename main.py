@@ -11,21 +11,16 @@ APP_SECRET = os.getenv("FEISHU_APP_SECRET")
 BASE_TOKEN = os.getenv("FEISHU_BASE_TOKEN")
 
 # 表格 ID 和字段 ID 映射
-ASSETS_TABLE_ID = "tblTFq4Cqsz0SSa1" 
+ASSETS_TABLE_ID = "tblTFq4Cqsz0SSa1"
 
-# --- 配置区 (CONF_START) ---
-# ... (其他不变) ...
-
-# 表格 ID 和字段 ID 映射
-ASSETS_TABLE_ID = "tblTFq4Cqsz0SSa1" 
-
-# 中文字段名到 Field ID 的映射 (使用你之前收集的 Field ID)
+# 字段 Field ID 映射 (使用你之前收集的 ID)
 FIELD_ID_MAP = {
     "Code": "fldaIfMQC8",        # 资产代码
     "Type": "fldwUSEPXS",        # 资产类型
     "Price": "fldycnGfq3",       # 价格
 }
 # --- 配置区 (CONF_END) ---
+
 # 飞书 API 终点
 FEISHU_AUTH_URL = "https://open.feishu.cn/open-apis/auth/v3/app_access_token/internal"
 FEISHU_API_BASE = "https://open.feishu.cn/open-apis/bitable/v1/apps"
@@ -56,17 +51,28 @@ class FeishuClient:
             raise Exception(f"获取 App Token 失败: {data.get('msg')}")
 
     def _get_table_data(self, table_id):
-        """通用方法：从飞书表格中读取所有记录（包括记录ID）"""
+        """通用方法：从飞书表格中读取所有记录（强制带 view_id 避免筛选）"""
         url = f"{FEISHU_API_BASE}/{self.base_token}/tables/{table_id}/records"
-        response = requests.get(url, headers=self.headers, params={"page_size": 100})
+        
+        # 确保读取所有字段，并指定 view_id 避免视图筛选影响
+        params = {
+            "page_size": 100, 
+            "view_id": "vewiMpomq3" # 使用你之前提供的视图 ID
+        }
+        
+        print(f"正在读取表格数据: {table_id}...")
+        response = requests.get(url, headers=self.headers, params=params)
         response.raise_for_status()
         data = response.json()
         
         if data.get("code") == 0:
-            return data["data"]["items"] 
+            # 打印实际读取到的记录数
+            items = data["data"]["items"]
+            print(f"读取成功，共 {len(items)} 条记录。")
+            return items 
         else:
             raise Exception(f"读取表格失败: {data.get('msg')}")
-    
+
     def _update_records(self, table_id, records_to_update):
         """更新飞书表格中的记录"""
         url = f"{FEISHU_API_BASE}/{self.base_token}/tables/{table_id}/records"
@@ -116,17 +122,19 @@ def main():
         yfinance_symbols = []
         record_map = {} # 用于存储 record_id 和 symbol 的映射
         
-# ... (在 main() 函数体内找到这个 for 循环) ...
-        
         for record in assets_records:
-            # 修改这里：使用 Field ID 而不是 "Code" 这个字符串来访问字段
-            symbol = record['fields'].get(FIELD_ID_MAP["Code"]) 
+            # 使用正确的 Field ID 来获取资产代码
+            symbol = record['fields'].get(FIELD_ID_MAP["Code"])
             
-            # ... (后面代码不变) ...
+            # 确保 symbol 存在且非空
             if symbol: 
                 yfinance_symbols.append(symbol)
                 record_map[symbol] = record['record_id'] # 记录每一行数据本身的ID
         
+        if not yfinance_symbols:
+            print("没有找到需要更新的资产。")
+            return
+
         # 2. 获取实时价格
         realtime_prices = fetch_yfinance_price(yfinance_symbols)
 
@@ -135,7 +143,8 @@ def main():
         price_field_id = FIELD_ID_MAP["Price"]
         
         for symbol, price in realtime_prices.items():
-            if symbol in record_map:
+            # 检查价格是否有效
+            if price is not None and symbol in record_map:
                 updates.append({
                     "record_id": record_map[symbol],
                     "fields": {
@@ -147,7 +156,7 @@ def main():
         if updates:
             feishu_client._update_records(ASSETS_TABLE_ID, updates)
         else:
-            print("没有找到需要更新的资产。")
+            print("未获取到有效价格，跳过写入。")
         
     except Exception as e:
         print(f"程序运行出错: {e}")
