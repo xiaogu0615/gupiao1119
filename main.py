@@ -73,12 +73,15 @@ class FeishuClient:
             raise Exception(f"读取表格失败: {data.get('msg')}")
 
     def update_price_records(self, records_to_update):
-        """更新飞书表格中的记录，并添加详细错误处理"""
+        """更新飞书表格中的记录，已移除 value_input_option 参数"""
         url = f"{FEISHU_API_BASE}/{self.base_token}/tables/{ASSETS_TABLE_ID}/records"
         payload = {"records": records_to_update}
 
         print(f"准备更新 {len(records_to_update)} 条记录...")
-        response = requests.post(url, headers=self.headers, data=json.dumps(payload), params={"value_input_option": "custom"})
+        
+        # *** 关键修改：移除 value_input_option=custom 参数 ***
+        # 允许飞书API以默认方式解析价格数据，这对于数字/货币类型通常是最佳选择
+        response = requests.post(url, headers=self.headers, data=json.dumps(payload))
         
         # 检查 HTTP 状态码
         if response.status_code != 200:
@@ -117,8 +120,6 @@ def fetch_yfinance_price(symbols):
     data = yf.download(unique_symbols, period="1d", progress=False)
 
     prices = {}
-    
-    # yfinance 返回的数据结构处理
     
     for symbol in unique_symbols:
         try:
@@ -201,9 +202,8 @@ def main():
             if symbol and symbol in price_data and price_data[symbol] is not None:
                 new_price = price_data[symbol]
                 
-                # *** 关键修改：尝试将浮点数价格转换为字符串 ***
-                # 这是因为飞书的“数字”或“货币”字段有时需要字符串格式的输入
-                price_value_for_feishu = str(new_price) 
+                # *** 关键修改：直接使用浮点数价格，不转换为字符串 ***
+                price_value_for_feishu = new_price 
                 
                 # 飞书 API 期望的更新结构
                 update_record = {
