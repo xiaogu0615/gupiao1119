@@ -120,8 +120,7 @@ def fetch_yfinance_price(symbols):
     
     print(f"正在从 yfinance 获取 {len(unique_symbols)} 个资产的价格...")
     
-    # 关键修改：移除 cache=False 参数，因为它在旧版本 yfinance 中不受支持。
-    # 保留 auto_adjust=True 消除 FutureWarning。
+    # 关键：移除 cache=False 参数，因为它在旧版本 yfinance 中不受支持。
     data = yf.download(unique_symbols, period="1d", progress=False, auto_adjust=True)
 
     prices = {}
@@ -211,8 +210,8 @@ def main():
             if symbol and symbol in price_data and price_data[symbol] is not None:
                 new_price = price_data[symbol]
                 
-                # *** 关键：将浮点数格式化为保留 5 位小数的字符串，以精确匹配飞书表格的字段设置 ***
-                price_value_for_feishu = f"{new_price:.5f}"
+                # *** 关键修改：直接使用 float (JSON number)，而不是格式化的字符串 ***
+                price_value_for_feishu = new_price 
                 
                 # 飞书 API 期望的更新结构
                 update_record = {
@@ -225,6 +224,7 @@ def main():
                 # *** 调试输出：打印一个示例 payload 元素 ***
                 if updated_count == 0:
                     print(f"--- 调试：示例更新记录结构 (ID: {record_id}) ---")
+                    # 使用 json.dumps 打印时，float 会被正确表示为 JSON number
                     print(json.dumps(update_record, indent=4, ensure_ascii=False))
                     print("-----------------------------------------------------")
 
