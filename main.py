@@ -13,14 +13,19 @@ BASE_TOKEN = os.getenv("FEISHU_BASE_TOKEN")
 # 表格 ID 和字段 ID 映射
 ASSETS_TABLE_ID = "tblTFq4Cqsz0SSa1" 
 
-# 中文字段名到 Field ID 的映射 (根据你的输入定制)
+# --- 配置区 (CONF_START) ---
+# ... (其他不变) ...
+
+# 表格 ID 和字段 ID 映射
+ASSETS_TABLE_ID = "tblTFq4Cqsz0SSa1" 
+
+# 中文字段名到 Field ID 的映射 (使用你之前收集的 Field ID)
 FIELD_ID_MAP = {
     "Code": "fldaIfMQC8",        # 资产代码
     "Type": "fldwUSEPXS",        # 资产类型
     "Price": "fldycnGfq3",       # 价格
 }
 # --- 配置区 (CONF_END) ---
-
 # 飞书 API 终点
 FEISHU_AUTH_URL = "https://open.feishu.cn/open-apis/auth/v3/app_access_token/internal"
 FEISHU_API_BASE = "https://open.feishu.cn/open-apis/bitable/v1/apps"
