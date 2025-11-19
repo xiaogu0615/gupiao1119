@@ -210,8 +210,9 @@ def main():
             if symbol and symbol in price_data and price_data[symbol] is not None:
                 new_price = price_data[symbol]
                 
-                # *** 关键修改：直接使用 float (JSON number)，而不是格式化的字符串 ***
-                price_value_for_feishu = new_price 
+                # *** 关键修复：重新采用精确到 5 位小数的字符串格式 ***
+                # 这是针对飞书数字/货币字段的最后尝试，强制匹配精度要求
+                price_value_for_feishu = f"{new_price:.5f}" 
                 
                 # 飞书 API 期望的更新结构
                 update_record = {
@@ -224,7 +225,7 @@ def main():
                 # *** 调试输出：打印一个示例 payload 元素 ***
                 if updated_count == 0:
                     print(f"--- 调试：示例更新记录结构 (ID: {record_id}) ---")
-                    # 使用 json.dumps 打印时，float 会被正确表示为 JSON number
+                    # 此时 fldycnGfq3 的值将带有引号（即 JSON 字符串）
                     print(json.dumps(update_record, indent=4, ensure_ascii=False))
                     print("-----------------------------------------------------")
 
