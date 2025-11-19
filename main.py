@@ -120,9 +120,9 @@ def fetch_yfinance_price(symbols):
     
     print(f"正在从 yfinance 获取 {len(unique_symbols)} 个资产的价格...")
     
-    # 关键修改：禁用缓存 (cache=False) 解决 'database is locked' 错误，
-    # 并设置 auto_adjust=True 消除 FutureWarning。
-    data = yf.download(unique_symbols, period="1d", progress=False, cache=False, auto_adjust=True)
+    # 关键修改：移除 cache=False 参数，因为它在旧版本 yfinance 中不受支持。
+    # 保留 auto_adjust=True 消除 FutureWarning。
+    data = yf.download(unique_symbols, period="1d", progress=False, auto_adjust=True)
 
     prices = {}
     
