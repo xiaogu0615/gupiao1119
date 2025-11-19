@@ -73,19 +73,19 @@ class FeishuClient:
             raise Exception(f"读取表格失败: {data.get('msg')}")
 
     def update_price_records(self, records_to_update):
-        """更新飞书表格中的记录，改用 value_input_option=text 模式"""
+        """更新飞书表格中的记录，移除 value_input_option 参数"""
         url = f"{FEISHU_API_BASE}/{self.base_token}/tables/{ASSETS_TABLE_ID}/records"
         payload = {"records": records_to_update}
 
         print(f"准备更新 {len(records_to_update)} 条记录...")
         
-        # *** 关键修改：改用 value_input_option=text 模式 ***
+        # *** 调试：打印完整 JSON Payload 结构 ***
         print("--- 调试：完整 JSON Payload 结构 ---")
         print(json.dumps(payload, indent=4, ensure_ascii=False))
         print("---------------------------------------")
         
-        # 使用 text 选项，强制飞书将输入值（float）解析为目标字段的纯文本格式
-        response = requests.post(url, headers=self.headers, data=json.dumps(payload), params={"value_input_option": "text"})
+        # *** 关键修改：移除 value_input_option 参数，使用默认写入模式 ***
+        response = requests.post(url, headers=self.headers, data=json.dumps(payload))
         
         # 检查 HTTP 状态码
         if response.status_code != 200:
@@ -134,7 +134,8 @@ def fetch_yfinance_price(symbols):
 
             if pd.notna(price):
                 # 将价格四舍五入到两位小数，并保留为浮点数
-                prices[symbol] = round(float(price), 2)
+                # 注意：这里我们保留 5 位小数，以匹配飞书字段设置
+                prices[symbol] = round(float(price), 5)
                 print(f"  ✅ {symbol}: {prices[symbol]}")
             else:
                 print(f"  ⚠️ {symbol}: 价格数据缺失或无效。")
@@ -206,8 +207,9 @@ def main():
             if symbol and symbol in price_data and price_data[symbol] is not None:
                 new_price = price_data[symbol]
                 
-                # *** 关键修改：使用浮点数，并依赖 value_input_option=text 强制解析 ***
-                price_value_for_feishu = new_price 
+                # *** 关键修改：将浮点数格式化为保留 5 位小数的字符串 ***
+                # 这是为了精确匹配飞书表格的字段设置
+                price_value_for_feishu = f"{new_price:.5f}"
                 
                 # 飞书 API 期望的更新结构
                 update_record = {
