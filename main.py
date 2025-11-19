@@ -110,12 +110,15 @@ def fetch_yfinance_price(symbols):
 
 def get_symbol_string(field_value):
     """从飞书 API 返回的复杂字段值中提取出股票代码字符串"""
-    if isinstance(field_value, list) and field_value and 'text' in field_value[0]:
-        # 针对飞书 Primary Field (主字段) 这种 {type: 'text', text: 'AAPL'} 的格式
-        return field_value[0]['text']
+    if not field_value:
+        return None
+    
+    # 针对飞书 Primary Field (主字段) 这种 {type: 'text', text: 'AAPL'} 的格式
+    if isinstance(field_value, list) and field_value and isinstance(field_value[0], dict) and 'text' in field_value[0]:
+        return field_value[0]['text'].strip()
+    # 针对其他简单字符串字段
     elif isinstance(field_value, str):
-        # 针对其他简单字符串字段
-        return field_value
+        return field_value.strip()
     return None
 
 
@@ -146,10 +149,12 @@ def main():
                 record_map[symbol] = record['record_id'] # 记录每一行数据本身的ID
         
         if not yfinance_symbols:
-            print("没有找到需要更新的资产。")
+            # 打印调试信息，确认是读取问题还是空记录问题
+            print("没有找到需要更新的资产。请检查飞书表格中 'Code' 字段是否正确填充了数据。")
             return
 
         # 2. 获取实时价格
+        print(f"正在查询以下资产代码的价格: {yfinance_symbols}")
         realtime_prices = fetch_yfinance_price(yfinance_symbols)
 
         # 3. 准备更新数据包
