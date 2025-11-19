@@ -120,21 +120,24 @@ def fetch_yfinance_price(symbols):
     
     print(f"正在从 yfinance 获取 {len(unique_symbols)} 个资产的价格...")
     
-    # 获取数据
-    data = yf.download(unique_symbols, period="1d", progress=False)
+    # 关键修改：禁用缓存 (cache=False) 解决 'database is locked' 错误，
+    # 并设置 auto_adjust=True 消除 FutureWarning。
+    data = yf.download(unique_symbols, period="1d", progress=False, cache=False, auto_adjust=True)
 
     prices = {}
     
     for symbol in unique_symbols:
         try:
+            # yfinance 在 auto_adjust=True 时，只会返回 'Close' 列
             if len(unique_symbols) == 1:
-                price = data['Adj Close'].iloc[-1] if 'Adj Close' in data.columns else data['Close'].iloc[-1]
+                # 如果只下载一个资产，结果是 Series
+                price = data['Close'].iloc[-1] 
             else:
-                price = data['Adj Close'][symbol].iloc[-1] if 'Adj Close' in data.columns else data['Close'][symbol].iloc[-1]
+                # 如果下载多个资产，结果是 DataFrame
+                price = data['Close'][symbol].iloc[-1]
 
             if pd.notna(price):
-                # 将价格四舍五入到两位小数，并保留为浮点数
-                # 注意：这里我们保留 5 位小数，以匹配飞书字段设置
+                # 价格保留 5 位小数的浮点数，以匹配飞书字段设置
                 prices[symbol] = round(float(price), 5)
                 print(f"  ✅ {symbol}: {prices[symbol]}")
             else:
@@ -142,6 +145,7 @@ def fetch_yfinance_price(symbols):
                 prices[symbol] = None
                 
         except Exception as e:
+            # 捕获并打印更清晰的错误信息
             print(f"  ❌ {symbol}: 获取价格失败 ({e})")
             prices[symbol] = None
             
@@ -207,8 +211,7 @@ def main():
             if symbol and symbol in price_data and price_data[symbol] is not None:
                 new_price = price_data[symbol]
                 
-                # *** 关键修改：将浮点数格式化为保留 5 位小数的字符串 ***
-                # 这是为了精确匹配飞书表格的字段设置
+                # *** 关键：将浮点数格式化为保留 5 位小数的字符串，以精确匹配飞书表格的字段设置 ***
                 price_value_for_feishu = f"{new_price:.5f}"
                 
                 # 飞书 API 期望的更新结构
@@ -241,6 +244,4 @@ def main():
         # 在 GitHub Actions 中，如果出现异常，脚本会以非零退出码退出，导致任务失败
 
 if __name__ == '__main__':
-    # 确保 yfinance 缓存路径设置
-    yf.set_tz_cache_location(os.path.expanduser('~/.yfinance'))
     main()
