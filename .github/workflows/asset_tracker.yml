@@ -1,0 +1,31 @@
+name: 💰 Portfolio Price Update
+
+on:
+  # 每天早上 8 点运行一次 (UTC 0点)
+  schedule:
+    - cron: '0 0 * * *' 
+  # 允许手动运行，方便调试
+  workflow_dispatch:
+
+jobs:
+  update-prices:
+    runs-on: ubuntu-latest
+    steps:
+    - name: 1. Checkout code
+      uses: actions/checkout@v4
+
+    - name: 2. Setup Python environment
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11' 
+
+    - name: 3. Install dependencies
+      run: pip install -r requirements.txt 
+
+    - name: 4. Run the script
+      run: python main.py
+      env:
+        # 注入密钥和 ID
+        FEISHU_APP_ID: ${{ secrets.FEISHU_APP_ID }}
+        FEISHU_APP_SECRET: ${{ secrets.FEISHU_APP_SECRET }}
+        FEISHU_BASE_TOKEN: ${{ secrets.FEISHU_BASE_TOKEN }}
