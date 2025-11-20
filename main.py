@@ -17,7 +17,8 @@ ASSETS_TABLE_ID = "tblTFq4Cqsz0SSa1"
 FIELD_ID_MAP = {
     "Code": "Code",              # 资产代码 (Primary Field 键名)
     "Type": "fldwUSEPXS",        # 资产类型 (字段 ID)
-    "Price": "fldycnGfq3",       # 价格 (字段 ID)
+    # >>>>>> 关键修改：请替换 'fldNewPrice' 为您新创建的“单行文本”字段 ID！ <<<<<<
+    "Price": "fldNewPrice",      # 价格 (使用新的可写入的文本字段 ID)
 }
 # --- 配置区 (CONF_END) ---
 
@@ -203,9 +204,8 @@ def main():
             if symbol and symbol in price_data and price_data[symbol] is not None:
                 new_price = price_data[symbol]
                 
-                # *** 最终修复：采用 JSON Number (Float) 格式 ***
-                # 这是飞书官方文档推荐的数字字段格式。我们信任这是正确的格式。
-                price_value_for_feishu = new_price 
+                # *** 最终写入格式：5 位小数的字符串，写入新的文本字段 ***
+                price_value_for_feishu = f"{new_price:.5f}" 
                 
                 # 飞书 API 期望的更新结构
                 update_record = {
