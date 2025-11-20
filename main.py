@@ -7,19 +7,18 @@ import yfinance as yf
 # --- 配置区 (CONF_START) ---
 APP_ID = os.getenv("FEISHU_APP_ID")
 APP_SECRET = os.getenv("FEISHU_APP_SECRET")
-BASE_TOKEN = os.getenv("FEISHU_BASE_TOKEN")
+BASE_TOKEN = os.getenv("FEISHU_BASE_TOKEN")  # 必须是 bascn... 开头的 Base Token
 
-# 表格 ID 和字段 ID 映射
 ASSETS_TABLE_ID = "tblTFq4Cqsz0SSa1"
 
+# 根据 Table Meta 配置字段 ID
 FIELD_ID_MAP = {
-    "Code": "Code",              # 资产代码 (Primary Field)
+    "Code": "fldaIfMQC8",        # 资产代码 (Primary Field)
     "Type": "fldwUSEPXS",        # 资产类型
-    "Price": "fldbbaX8bo",       # 价格字段 ID（必须是数字类型）
+    "Price": "fldbbaX8bo",       # API最新价格 (数字类型)
 }
 # --- 配置区 (CONF_END) ---
 
-# 飞书 API 终点
 FEISHU_AUTH_URL = "https://open.feishu.cn/open-apis/auth/v3/app_access_token/internal"
 FEISHU_API_BASE = "https://open.feishu.cn/open-apis/bitable/v1/apps"
 
@@ -27,6 +26,7 @@ class FeishuClient:
     """飞书 API 客户端"""
 
     def __init__(self, app_id, app_secret, base_token):
+        self._check_base_token(base_token)
         self.app_id = app_id
         self.app_secret = app_secret
         self.base_token = base_token
@@ -35,6 +35,11 @@ class FeishuClient:
             "Authorization": f"Bearer {self._access_token}",
             "Content-Type": "application/json"
         }
+
+    def _check_base_token(self, base_token):
+        """检查 Base Token 格式"""
+        if not base_token.startswith("bascn"):
+            raise ValueError(f"错误：FEISHU_BASE_TOKEN 格式不正确，应为 bascn...，当前值: {base_token}")
 
     def _get_app_access_token(self):
         """获取 App Access Token"""
