@@ -130,7 +130,6 @@ def fetch_yfinance_price(symbols):
 
             if pd.notna(price):
                 # 价格保留 5 位小数的浮点数，以匹配飞书字段设置
-                # 注意：虽然这里是 5 位，但我们在 main() 中会将其格式化为 2 位字符串
                 prices[symbol] = round(float(price), 5)
                 print(f"  ✅ {symbol}: {prices[symbol]}")
             else:
@@ -204,9 +203,9 @@ def main():
             if symbol and symbol in price_data and price_data[symbol] is not None:
                 new_price = price_data[symbol]
                 
-                # *** 关键修复：采用精确到 2 位小数的字符串格式 ***
-                # 这是针对飞书数字/货币字段的最后尝试，强制匹配常见货币显示精度
-                price_value_for_feishu = f"{new_price:.2f}" 
+                # *** 最终修复：采用 JSON Number (Float) 格式 ***
+                # 这是飞书官方文档推荐的数字字段格式。我们信任这是正确的格式。
+                price_value_for_feishu = new_price 
                 
                 # 飞书 API 期望的更新结构
                 update_record = {
@@ -219,7 +218,7 @@ def main():
                 # *** 调试输出：打印一个示例 payload 元素 ***
                 if updated_count == 0:
                     print(f"--- 调试：示例更新记录结构 (ID: {record_id}) ---")
-                    # 此时 fldycnGfq3 的值将是简单字符串，只有 2 位小数
+                    # 此时 fldycnGfq3 的值将是 JSON 数字类型 (Float)
                     print(json.dumps(update_record, indent=4, ensure_ascii=False))
                     print("-----------------------------------------------------")
 
