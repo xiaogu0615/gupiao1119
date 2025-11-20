@@ -73,7 +73,7 @@ class FeishuClient:
             raise Exception(f"读取表格失败: {data.get('msg')}")
 
     def update_price_records(self, records_to_update):
-        """更新飞书表格中的记录，移除 value_input_option 参数"""
+        """更新飞书表格中的记录"""
         url = f"{FEISHU_API_BASE}/{self.base_token}/tables/{ASSETS_TABLE_ID}/records"
         payload = {"records": records_to_update}
 
@@ -84,27 +84,22 @@ class FeishuClient:
         print(json.dumps(payload, indent=4, ensure_ascii=False))
         print("---------------------------------------")
         
-        # *** 关键修改：移除 value_input_option 参数，使用默认写入模式 ***
+        # 使用默认写入模式
         response = requests.post(url, headers=self.headers, data=json.dumps(payload))
         
         # 检查 HTTP 状态码
         if response.status_code != 200:
-            # 如果不是 200，尝试解析 JSON 错误信息
             try:
                 error_data = response.json()
-                # 抛出包含飞书详细错误信息的异常
                 raise Exception(f"写入失败，HTTP 状态码: {response.status_code}. 飞书错误码: {error_data.get('code')}. 错误信息: {error_data.get('msg')}. 详细数据: {error_data}")
             except json.JSONDecodeError:
-                # 如果无法解析 JSON，则抛出原始 HTTP 错误
                 response.raise_for_status()
         
-        # 如果状态码是 200，解析数据
         data = response.json()
         
         if data.get("code") == 0:
             print("数据成功写入飞书！✅")
         else:
-            # 飞书 API 可能会在 200 状态下返回业务错误
             raise Exception(f"写入失败，飞书返回业务错误: {data.get('msg')}. 详细错误信息: {data}")
 
 def fetch_yfinance_price(symbols):
@@ -120,7 +115,7 @@ def fetch_yfinance_price(symbols):
     
     print(f"正在从 yfinance 获取 {len(unique_symbols)} 个资产的价格...")
     
-    # 关键：移除 cache=False 参数，因为它在旧版本 yfinance 中不受支持。
+    # 移除不受支持的 cache=False，使用 auto_adjust=True
     data = yf.download(unique_symbols, period="1d", progress=False, auto_adjust=True)
 
     prices = {}
@@ -129,10 +124,8 @@ def fetch_yfinance_price(symbols):
         try:
             # yfinance 在 auto_adjust=True 时，只会返回 'Close' 列
             if len(unique_symbols) == 1:
-                # 如果只下载一个资产，结果是 Series
                 price = data['Close'].iloc[-1] 
             else:
-                # 如果下载多个资产，结果是 DataFrame
                 price = data['Close'][symbol].iloc[-1]
 
             if pd.notna(price):
@@ -210,9 +203,15 @@ def main():
             if symbol and symbol in price_data and price_data[symbol] is not None:
                 new_price = price_data[symbol]
                 
-                # *** 关键修复：重新采用精确到 5 位小数的字符串格式 ***
-                # 这是针对飞书数字/货币字段的最后尝试，强制匹配精度要求
-                price_value_for_feishu = f"{new_price:.5f}" 
+                # 格式化为精确到 5 位小数的字符串
+                price_string = f"{new_price:.5f}" 
+                
+                # *** 最终修复：采用富文本列表结构来解决字段验证失败问题 ***
+                price_value_for_feishu = [
+                    {
+                        "text": price_string
+                    }
+                ]
                 
                 # 飞书 API 期望的更新结构
                 update_record = {
@@ -225,7 +224,7 @@ def main():
                 # *** 调试输出：打印一个示例 payload 元素 ***
                 if updated_count == 0:
                     print(f"--- 调试：示例更新记录结构 (ID: {record_id}) ---")
-                    # 此时 fldycnGfq3 的值将带有引号（即 JSON 字符串）
+                    # 此时 fldycnGfq3 的值将是富文本列表结构
                     print(json.dumps(update_record, indent=4, ensure_ascii=False))
                     print("-----------------------------------------------------")
 
