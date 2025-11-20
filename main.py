@@ -17,8 +17,8 @@ ASSETS_TABLE_ID = "tblTFq4Cqsz0SSa1"
 FIELD_ID_MAP = {
     "Code": "Code",              # 资产代码 (Primary Field 键名)
     "Type": "fldwUSEPXS",        # 资产类型 (字段 ID)
-    # >>>>>> 关键修改：请替换 'fldNewPrice' 为您新创建的“单行文本”字段 ID！ <<<<<<
-    "Price": "fldNewPrice",      # 价格 (使用新的可写入的文本字段 ID)
+    # >>>>>> 关键修复：根据元数据，将价格字段 ID 修正回 fldycnGfq3 (单行文本类型 1) <<<<<<
+    "Price": "fldycnGfq3",       # 价格 (使用实际的文本字段 ID)
 }
 # --- 配置区 (CONF_END) ---
 
@@ -204,8 +204,14 @@ def main():
             if symbol and symbol in price_data and price_data[symbol] is not None:
                 new_price = price_data[symbol]
                 
-                # *** 最终写入格式：5 位小数的字符串，写入新的文本字段 ***
-                price_value_for_feishu = f"{new_price:.5f}" 
+                # *** 最终写入格式：富文本列表，用于单行文本 (type=1) ***
+                price_string = f"{new_price:.5f}" 
+                
+                price_value_for_feishu = [
+                    {
+                        "text": price_string
+                    }
+                ]
                 
                 # 飞书 API 期望的更新结构
                 update_record = {
@@ -218,7 +224,7 @@ def main():
                 # *** 调试输出：打印一个示例 payload 元素 ***
                 if updated_count == 0:
                     print(f"--- 调试：示例更新记录结构 (ID: {record_id}) ---")
-                    # 此时 fldycnGfq3 的值将是 JSON 数字类型 (Float)
+                    # 此时 fldycnGfq3 的值将是 Rich-Text List 结构
                     print(json.dumps(update_record, indent=4, ensure_ascii=False))
                     print("-----------------------------------------------------")
 
