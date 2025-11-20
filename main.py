@@ -17,7 +17,7 @@ ASSETS_TABLE_ID = "tblTFq4Cqsz0SSa1"
 FIELD_ID_MAP = {
     "Code": "Code",              # 资产代码 (Primary Field 键名)
     "Type": "fldwUSEPXS",        # 资产类型 (字段 ID)
-    # >>>>>> 新创建的、可写入的“单行文本”字段 ID: fldbbaX8bo <<<<<<
+    # >>>>>> 新创建的、可写入的“数字”字段 ID: fldbbaX8bo (请在飞书表格中将此字段类型改为“数字”) <<<<<<
     "Price": "fldbbaX8bo",       # 价格 (使用新的文本字段 ID)
 }
 # --- 配置区 (CONF_END) ---
@@ -92,9 +92,10 @@ class FeishuClient:
         if response.status_code != 200:
             try:
                 error_data = response.json()
-                # 检查是否是富文本结构写入错误
+                
+                # 提示用户检查权限和字段类型
                 if 'field validation failed' in error_data.get('msg', ''):
-                     print("注意：如果价格字段是单行文本，请确保写入的是纯字符串，而不是富文本数组格式。")
+                     print("注意：如果此字段现在是【数字】类型，请确保 App 拥有 Base 的【可编辑】权限。代码结构已修正为数字类型写入。")
                 
                 raise Exception(f"写入失败，HTTP 状态码: {response.status_code}. 飞书错误码: {error_data.get('code')}. 错误信息: {error_data.get('msg')}. 详细数据: {error_data}")
             except json.JSONDecodeError:
@@ -150,7 +151,7 @@ def fetch_yfinance_price(symbols):
 
 def get_symbol_string(field_value):
     """
-    从飞书 API 返回的复杂字段值中提取出股票代码字符串 (读取 Primary Field 时可能需要).
+    从飞书 API 返回的复杂字段值中提取出股票代码字符串 (用于读取 Primary Field 或 Text Field).
     """
     if not field_value:
         return None
@@ -162,6 +163,10 @@ def get_symbol_string(field_value):
     # 检查是否是富文本数组 (读取其他字段时可能返回的格式)
     elif isinstance(field_value, list) and field_value and isinstance(field_value[0], dict) and 'text' in field_value[0]:
         return field_value[0]['text'].strip()
+    
+    # 如果是数字类型字段，它可能直接返回 float 或 int
+    elif isinstance(field_value, (float, int)):
+        return str(field_value) # 转换为字符串，用于后续的 yfinance 查找
     
     return None
 
@@ -208,23 +213,23 @@ def main():
             
             # 只有当代码有效且成功获取到价格时才进行更新
             if symbol and symbol in price_data and price_data[symbol] is not None:
+                # new_price 是 float 类型
                 new_price = price_data[symbol]
                 
-                # *** 关键修复：强制使用纯字符串格式，对应 "单行文本" 字段类型 (Type 1) ***
-                price_string = str(new_price) 
+                # *** 关键修复：写入 JSON 数字 (float)，适配飞书“数字”字段类型 ***
                 
-                # 飞书 API 期望的更新结构，确保字段值是纯字符串
+                # 飞书 API 期望的更新结构，确保字段值是浮点数/数字
                 update_record = {
                     "record_id": record_id,
                     "fields": {
-                        price_field_id: price_string # 写入纯字符串
+                        price_field_id: new_price # 写入浮点数，而不是字符串
                     }
                 }
                 
                 # *** 调试输出：打印一个示例 payload 元素 ***
                 if updated_count == 0:
                     print(f"--- 调试：示例更新记录结构 (ID: {record_id}) ---")
-                    # 此时 fldbbaX8bo 的值将是 Simple String 结构
+                    # 此时 fldbbaX8bo 的值将是 JSON Number 结构
                     print(json.dumps(update_record, indent=4, ensure_ascii=False))
                     print("-----------------------------------------------------")
 
