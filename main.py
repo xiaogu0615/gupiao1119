@@ -130,6 +130,7 @@ def fetch_yfinance_price(symbols):
 
             if pd.notna(price):
                 # 价格保留 5 位小数的浮点数，以匹配飞书字段设置
+                # 注意：虽然这里是 5 位，但我们在 main() 中会将其格式化为 2 位字符串
                 prices[symbol] = round(float(price), 5)
                 print(f"  ✅ {symbol}: {prices[symbol]}")
             else:
@@ -203,15 +204,9 @@ def main():
             if symbol and symbol in price_data and price_data[symbol] is not None:
                 new_price = price_data[symbol]
                 
-                # 格式化为精确到 5 位小数的字符串
-                price_string = f"{new_price:.5f}" 
-                
-                # *** 最终修复：采用富文本列表结构来解决字段验证失败问题 ***
-                price_value_for_feishu = [
-                    {
-                        "text": price_string
-                    }
-                ]
+                # *** 关键修复：采用精确到 2 位小数的字符串格式 ***
+                # 这是针对飞书数字/货币字段的最后尝试，强制匹配常见货币显示精度
+                price_value_for_feishu = f"{new_price:.2f}" 
                 
                 # 飞书 API 期望的更新结构
                 update_record = {
@@ -224,7 +219,7 @@ def main():
                 # *** 调试输出：打印一个示例 payload 元素 ***
                 if updated_count == 0:
                     print(f"--- 调试：示例更新记录结构 (ID: {record_id}) ---")
-                    # 此时 fldycnGfq3 的值将是富文本列表结构
+                    # 此时 fldycnGfq3 的值将是简单字符串，只有 2 位小数
                     print(json.dumps(update_record, indent=4, ensure_ascii=False))
                     print("-----------------------------------------------------")
 
