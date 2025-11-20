@@ -204,9 +204,9 @@ def main():
             if symbol and symbol in price_data and price_data[symbol] is not None:
                 new_price = price_data[symbol]
                 
-                # *** 最终写入格式：纯字符串，用于单行文本 (type=1) ***
-                # 这是最简单的格式，如果富文本列表失败，就尝试这个。
-                price_value_for_feishu = f"{new_price:.5f}" 
+                # *** 最终写入格式：纯字符串，不再强制 .5f，让 Python 决定精度 ***
+                # 这是最简单的格式，如果前面带 .5f 的字符串失败，就尝试这个。
+                price_value_for_feishu = str(new_price)
                 
                 # 飞书 API 期望的更新结构
                 update_record = {
