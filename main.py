@@ -2,7 +2,6 @@ import os
 import json
 import time
 import requests
-import pandas as pd
 import yfinance as yf
 
 APP_ID = os.getenv("FEISHU_APP_ID")
@@ -50,20 +49,27 @@ class FeishuClient:
         return d["data"]["items"]
 
     def update_one_record(self, record_id, fields):
-        """正确的飞书更新方式：逐条 PATCH"""
+        """安全更新记录：失败重试 + 捕获异常"""
         url = f"{FEISHU_API_BASE}/{BASE_TOKEN}/tables/{ASSETS_TABLE_ID}/records/{record_id}"
         payload = {"fields": fields}
 
-        r = requests.patch(url, headers=self.headers, json=payload)
-
-        if r.status_code != 200:
-            raise Exception(f"PATCH HTTP 错误 {r.status_code}: {r.text}")
-
-        d = r.json()
-        if d.get("code") != 0:
-            raise Exception(f"飞书业务错误: {d}")
-
-        return True
+        for attempt in range(3):
+            try:
+                r = requests.patch(url, headers=self.headers, json=payload)
+                if r.status_code == 404:
+                    print(f"  ✖ 记录不存在: {record_id}")
+                    return False
+                r.raise_for_status()
+                d = r.json()
+                if d.get("code") != 0:
+                    print(f"  ⚠ 飞书业务错误: {d}")
+                    time.sleep(1)
+                    continue
+                return True
+            except requests.RequestException as e:
+                print(f"  ⚠ PATCH 第 {attempt+1} 次失败: {e}")
+                time.sleep(1)
+        return False
 
 
 # ============================
@@ -91,14 +97,11 @@ def fetch_prices(symbols):
                 price = df["Close"].iloc[-1]
             else:
                 price = df["Close"][s].iloc[-1]
-
             prices[s] = round(float(price), 5)
             print(f"  ✔ {s}: {prices[s]}")
-
         except:
             print(f"  ✖ {s}: 无价格数据")
             prices[s] = None
-
     return prices
 
 
@@ -125,35 +128,34 @@ def main():
         return
 
     client = FeishuClient()
-
     rows = client.get_records()
     print(f"读取到 {len(rows)} 条记录")
 
+    # 获取 symbol 列表 + record_id 对应
+    symbol_to_rid = {}
     symbols = []
     for r in rows:
         s = get_symbol(r["fields"].get(FIELD_CODE))
         if s:
             symbols.append(s)
+            symbol_to_rid[s] = r["record_id"]
 
     prices = fetch_prices(symbols)
 
     print("\n开始更新飞书记录...\n")
-
     updated = 0
-    for r in rows:
-        rid = r["record_id"]
-        s = get_symbol(r["fields"].get(FIELD_CODE))
-
-        if s and prices.get(s) is not None:
-            fields = {FIELD_PRICE: prices[s]}
-            client.update_one_record(rid, fields)
-            print(f"  ✔ 已更新 {s} → {prices[s]}")
-            updated += 1
+    for s, rid in symbol_to_rid.items():
+        price = prices.get(s)
+        if price is not None:
+            success = client.update_one_record(rid, {FIELD_PRICE: price})
+            if success:
+                print(f"  ✔ 已更新 {s} → {price}")
+                updated += 1
+            else:
+                print(f"  ✖ 更新失败 {s}")
 
     print(f"\n🎉 完成：共更新 {updated} 条记录。")
 
 
 if __name__ == "__main__":
     main()
-
-
